@@ -1,5 +1,5 @@
 # Example Progress Journal
 
-## Week 0 (September 19)
+## Week 1 (October 18)
 
-[Here](files/HW0GZM.html) is my 5 interesting R examples. 
+[Here](files/hw1gizemkurtbay_ie582.html) is my R code for HW1. 
