@@ -1,5 +1,5 @@
 # Example Progress Journal
 
-## Week 1 (October 18)
+## Week 2 (October 26)
 
-[Here](files/hw1gizemkurtbay_ie582.html) is my R code and report for HW1. 
+[Here](files/hw2gizem.html) is my Rmd file for HW2.
