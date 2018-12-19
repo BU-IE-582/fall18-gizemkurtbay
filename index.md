@@ -21,3 +21,7 @@
 ## November 19 
 
 [Here](files/HW3gizemwithcodes.html) is my Rmd file for HW3 with codes.
+
+## December 19 
+
+[Here](files/hw4gizem.html) is my Rmd file for HW4 with codes.
