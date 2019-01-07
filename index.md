@@ -29,3 +29,7 @@
 ## January 07 
 
 [Here](files/gizemhw5.html) is my Rmd file for HW5.
+
+## January 07 
+
+[Here](files/IE_582_-_Project__Group_8_.html) is my Rmd file for PROJECT.
