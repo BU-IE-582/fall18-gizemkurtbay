@@ -327,239 +327,136 @@ $(document).ready(function () {
 <pre><code>## Loading required package: cluster</code></pre>
 <p>The data is taken into R from the musk1 excel file.</p>
 <pre class="r"><code>setwd(&quot;C:/Users/Gizem/Desktop/dersler bilgisayar/ie582datamning/hw5/&quot;)
-muskdata &lt;- fread(&quot;Musk1.csv&quot;)</code></pre>
-<p>The musk data is turmed into a 476 by 2 matrix with class of bag and id of bag info, and then the features are prepared.</p>
+muskdata = fread(&quot;Musk1.csv&quot;)</code></pre>
+<p>The musk data is turmed into a 476 by 2 matrix with class of bag and id of bag info, and then the features are prepared. And a constant seed number is set.</p>
 <pre class="r"><code>bags_of_musk = muskdata[, c(1, 2)]
 setnames(bags_of_musk, c(&quot;class_of_bag&quot;, &quot;id_of_bag&quot;))
-features_of_musk_data &lt;- muskdata[, 3:ncol(muskdata)][, lapply(.SD, scale)]</code></pre>
+features_of_musk_data = muskdata[, 3:ncol(muskdata)][, lapply(.SD, scale)]
+
+set.seed(124)</code></pre>
 <p>A function is created that uses different uses clustering methods that turns multiple-instance data into bag-level data. Then 10-fold cross validation is done in the same function with lasso (Least Absolute Shrinkage and Selection Operator). The steps of the calculations can be explained simply. First, distance matrix is calculated with distance types, and then the clustering is done. Then clusters and features are merged together. Then the centroids of the clusters are calculated and distance of each instance from the centroids are found, then the mean of these are found for each bag. And this data is combined with bag classes. Then 10-fold cross validaiton with lasso penalties is done to prevent overfitting. And the results are turned into a table.</p>
-<pre class="r"><code>steps_of_hw &lt;- function(clusts, clutype, disttype, names, features) {
+<pre class="r"><code>steps_of_hw = function(cluster_numbers, method_of_clustering, type_of_distribution, names, features) {
   
   # distance matrix is calculated with distance type
-  distance_matrix &lt;- dist(features, method = disttype)
+  distance_matrix = dist(features, method = type_of_distribution)
   
   #  clustering is done
-  if (clutype == &quot;k-medoid&quot;) {
-    clusters &lt;- pam(distance_matrix, clusts, diss = TRUE)$clustering  
+  if (method_of_clustering == &quot;k-medoid&quot;) {
+    clusters = pam(distance_matrix, cluster_numbers, diss = TRUE)$clustering  
     #pam function is used for k-medoid
   }
   
   else {
-    clusters &lt;- cutree(hclust(distance_matrix, method = &quot;ward.D2&quot;), k = clusts)
+    clusters = cutree(hclust(distance_matrix, method = &quot;ward.D2&quot;), k = cluster_numbers)
   }
   #feature and cluster info are combined together into one dataset
-  clusters_and_features &lt;- cbind(features, clusters)     
+  clusters_and_features = cbind(features, clusters)     
   
   # cluster centroids are calculated
-  cluster_centroids &lt;- copy( clusters_and_features)[, lapply(.SD, mean), by = clusters] 
+  cluster_centroids = copy( clusters_and_features)[, lapply(.SD, mean), by = clusters] 
   
   # distance of each instance from the centroids are calculated
-  distance_from_centroids &lt;- as.matrix(dist(rbind(copy(cluster_centroids)[, clusters := NULL], copy( clusters_and_features)[, clusters := NULL]), method = disttype))
-  distance_from_centroids &lt;- as.data.table(distance_from_centroids[(clusts+1):nrow(distance_from_centroids), 1:clusts])
+  distance_from_centroids = as.matrix(dist(rbind(copy(cluster_centroids)[, clusters := NULL], copy( clusters_and_features)[, clusters := NULL]), method = type_of_distribution))
+  distance_from_centroids = as.data.table(distance_from_centroids[(cluster_numbers+1):nrow(distance_from_centroids), 1:cluster_numbers])
   
   # The mean of centroid distances are calculated for each bag 
   #And than this data is merged together with bag classes
-  merged_data_for_bags &lt;- unique(merge(names, cbind(id_of_bag = names$id_of_bag, distance_from_centroids)[, lapply(.SD, mean), by = id_of_bag], by = &quot;id_of_bag&quot;))[, id_of_bag := NULL]
+  merged_data_for_bags = unique(merge(names, cbind(id_of_bag = names$id_of_bag, distance_from_centroids)[, lapply(.SD, mean), by = id_of_bag], by = &quot;id_of_bag&quot;))[, id_of_bag := NULL]
   
   # 10-fold cross validation is done with lasso penalties
-  cv_lasso &lt;- cv.glmnet(x = as.matrix(copy(merged_data_for_bags)[, class_of_bag := NULL]), y = as.factor(merged_data_for_bags$class_of_bag), nfolds = 10, type.measure = &quot;auc&quot;, family = &quot;binomial&quot;)
+  cv_lasso = cv.glmnet(x = as.matrix(copy(merged_data_for_bags)[, class_of_bag := NULL]), y = as.factor(merged_data_for_bags$class_of_bag), nfolds = 10, type.measure = &quot;auc&quot;, family = &quot;binomial&quot;)
   
   # the function gives data in a way that a new table can be filled with this data
-  return(data.table(clusts = clusts, clutype = clutype, disttype = disttype, cvminlambda = cv_lasso$lambda.min, cvminerror = min(cv_lasso$cvm)))
+  return(data.table(cluster_numbers = cluster_numbers, method_of_clustering = method_of_clustering, type_of_distribution = type_of_distribution, min_lambda_with_cv = cv_lasso$lambda.min, min_error_with_cv = min(cv_lasso$cvm)))
 }</code></pre>
 <p>Range of cluster numbers is chosen to be between 2 and 10.</p>
-<pre class="r"><code>range_of_cluster_numbers &lt;- 2:10</code></pre>
+<pre class="r"><code>range_of_cluster_numbers = 2:10</code></pre>
 <p>A new table is filled with the created data and shown as below</p>
-<pre class="r"><code>table_of_results &lt;- data.table()
+<pre class="r"><code>table_of_results = data.table()
 for (i in range_of_cluster_numbers) {
-  table_of_results &lt;- rbind(table_of_results, steps_of_hw(i, &quot;k-medoid&quot;, &quot;euclidean&quot;, bags_of_musk, features_of_musk_data))
-  table_of_results &lt;- rbind(table_of_results, steps_of_hw(i, &quot;hierarch_clustering&quot;, &quot;euclidean&quot;, bags_of_musk, features_of_musk_data))
-  table_of_results &lt;- rbind(table_of_results, steps_of_hw(i, &quot;k-medoid&quot;, &quot;manhattan&quot;, bags_of_musk, features_of_musk_data))
-  table_of_results &lt;- rbind(table_of_results, steps_of_hw(i, &quot;hierarch_clustering&quot;, &quot;manhattan&quot;, bags_of_musk, features_of_musk_data))
+  table_of_results = rbind(table_of_results, steps_of_hw(i, &quot;k-medoid&quot;, &quot;euclidean&quot;, bags_of_musk, features_of_musk_data))
+  table_of_results = rbind(table_of_results, steps_of_hw(i, &quot;hierarch_clustering&quot;, &quot;euclidean&quot;, bags_of_musk, features_of_musk_data))
+  table_of_results = rbind(table_of_results, steps_of_hw(i, &quot;k-medoid&quot;, &quot;manhattan&quot;, bags_of_musk, features_of_musk_data))
+  table_of_results = rbind(table_of_results, steps_of_hw(i, &quot;hierarch_clustering&quot;, &quot;manhattan&quot;, bags_of_musk, features_of_musk_data))
 }</code></pre>
-<pre><code>## Warning: Too few (&lt; 10) observations per fold for type.measure=&#39;auc&#39; in
-## cv.lognet; changed to type.measure=&#39;deviance&#39;. Alternatively, use smaller
-## value for nfolds
-
-## Warning: Too few (&lt; 10) observations per fold for type.measure=&#39;auc&#39; in
-## cv.lognet; changed to type.measure=&#39;deviance&#39;. Alternatively, use smaller
-## value for nfolds
-
-## Warning: Too few (&lt; 10) observations per fold for type.measure=&#39;auc&#39; in
-## cv.lognet; changed to type.measure=&#39;deviance&#39;. Alternatively, use smaller
-## value for nfolds
-
-## Warning: Too few (&lt; 10) observations per fold for type.measure=&#39;auc&#39; in
-## cv.lognet; changed to type.measure=&#39;deviance&#39;. Alternatively, use smaller
-## value for nfolds
-
-## Warning: Too few (&lt; 10) observations per fold for type.measure=&#39;auc&#39; in
-## cv.lognet; changed to type.measure=&#39;deviance&#39;. Alternatively, use smaller
-## value for nfolds
-
-## Warning: Too few (&lt; 10) observations per fold for type.measure=&#39;auc&#39; in
-## cv.lognet; changed to type.measure=&#39;deviance&#39;. Alternatively, use smaller
-## value for nfolds
-
-## Warning: Too few (&lt; 10) observations per fold for type.measure=&#39;auc&#39; in
-## cv.lognet; changed to type.measure=&#39;deviance&#39;. Alternatively, use smaller
-## value for nfolds
-
-## Warning: Too few (&lt; 10) observations per fold for type.measure=&#39;auc&#39; in
-## cv.lognet; changed to type.measure=&#39;deviance&#39;. Alternatively, use smaller
-## value for nfolds
-
-## Warning: Too few (&lt; 10) observations per fold for type.measure=&#39;auc&#39; in
-## cv.lognet; changed to type.measure=&#39;deviance&#39;. Alternatively, use smaller
-## value for nfolds
-
-## Warning: Too few (&lt; 10) observations per fold for type.measure=&#39;auc&#39; in
-## cv.lognet; changed to type.measure=&#39;deviance&#39;. Alternatively, use smaller
-## value for nfolds
-
-## Warning: Too few (&lt; 10) observations per fold for type.measure=&#39;auc&#39; in
-## cv.lognet; changed to type.measure=&#39;deviance&#39;. Alternatively, use smaller
-## value for nfolds
-
-## Warning: Too few (&lt; 10) observations per fold for type.measure=&#39;auc&#39; in
-## cv.lognet; changed to type.measure=&#39;deviance&#39;. Alternatively, use smaller
-## value for nfolds
-
-## Warning: Too few (&lt; 10) observations per fold for type.measure=&#39;auc&#39; in
-## cv.lognet; changed to type.measure=&#39;deviance&#39;. Alternatively, use smaller
-## value for nfolds
-
-## Warning: Too few (&lt; 10) observations per fold for type.measure=&#39;auc&#39; in
-## cv.lognet; changed to type.measure=&#39;deviance&#39;. Alternatively, use smaller
-## value for nfolds
-
-## Warning: Too few (&lt; 10) observations per fold for type.measure=&#39;auc&#39; in
-## cv.lognet; changed to type.measure=&#39;deviance&#39;. Alternatively, use smaller
-## value for nfolds
-
-## Warning: Too few (&lt; 10) observations per fold for type.measure=&#39;auc&#39; in
-## cv.lognet; changed to type.measure=&#39;deviance&#39;. Alternatively, use smaller
-## value for nfolds
-
-## Warning: Too few (&lt; 10) observations per fold for type.measure=&#39;auc&#39; in
-## cv.lognet; changed to type.measure=&#39;deviance&#39;. Alternatively, use smaller
-## value for nfolds
-
-## Warning: Too few (&lt; 10) observations per fold for type.measure=&#39;auc&#39; in
-## cv.lognet; changed to type.measure=&#39;deviance&#39;. Alternatively, use smaller
-## value for nfolds
-
-## Warning: Too few (&lt; 10) observations per fold for type.measure=&#39;auc&#39; in
-## cv.lognet; changed to type.measure=&#39;deviance&#39;. Alternatively, use smaller
-## value for nfolds
-
-## Warning: Too few (&lt; 10) observations per fold for type.measure=&#39;auc&#39; in
-## cv.lognet; changed to type.measure=&#39;deviance&#39;. Alternatively, use smaller
-## value for nfolds
-
-## Warning: Too few (&lt; 10) observations per fold for type.measure=&#39;auc&#39; in
-## cv.lognet; changed to type.measure=&#39;deviance&#39;. Alternatively, use smaller
-## value for nfolds
-
-## Warning: Too few (&lt; 10) observations per fold for type.measure=&#39;auc&#39; in
-## cv.lognet; changed to type.measure=&#39;deviance&#39;. Alternatively, use smaller
-## value for nfolds
-
-## Warning: Too few (&lt; 10) observations per fold for type.measure=&#39;auc&#39; in
-## cv.lognet; changed to type.measure=&#39;deviance&#39;. Alternatively, use smaller
-## value for nfolds
-
-## Warning: Too few (&lt; 10) observations per fold for type.measure=&#39;auc&#39; in
-## cv.lognet; changed to type.measure=&#39;deviance&#39;. Alternatively, use smaller
-## value for nfolds
-
-## Warning: Too few (&lt; 10) observations per fold for type.measure=&#39;auc&#39; in
-## cv.lognet; changed to type.measure=&#39;deviance&#39;. Alternatively, use smaller
-## value for nfolds
-
-## Warning: Too few (&lt; 10) observations per fold for type.measure=&#39;auc&#39; in
-## cv.lognet; changed to type.measure=&#39;deviance&#39;. Alternatively, use smaller
-## value for nfolds
-
-## Warning: Too few (&lt; 10) observations per fold for type.measure=&#39;auc&#39; in
-## cv.lognet; changed to type.measure=&#39;deviance&#39;. Alternatively, use smaller
-## value for nfolds
-
-## Warning: Too few (&lt; 10) observations per fold for type.measure=&#39;auc&#39; in
-## cv.lognet; changed to type.measure=&#39;deviance&#39;. Alternatively, use smaller
-## value for nfolds
-
-## Warning: Too few (&lt; 10) observations per fold for type.measure=&#39;auc&#39; in
-## cv.lognet; changed to type.measure=&#39;deviance&#39;. Alternatively, use smaller
-## value for nfolds
-
-## Warning: Too few (&lt; 10) observations per fold for type.measure=&#39;auc&#39; in
-## cv.lognet; changed to type.measure=&#39;deviance&#39;. Alternatively, use smaller
-## value for nfolds
-
-## Warning: Too few (&lt; 10) observations per fold for type.measure=&#39;auc&#39; in
-## cv.lognet; changed to type.measure=&#39;deviance&#39;. Alternatively, use smaller
-## value for nfolds
-
-## Warning: Too few (&lt; 10) observations per fold for type.measure=&#39;auc&#39; in
-## cv.lognet; changed to type.measure=&#39;deviance&#39;. Alternatively, use smaller
-## value for nfolds
-
-## Warning: Too few (&lt; 10) observations per fold for type.measure=&#39;auc&#39; in
-## cv.lognet; changed to type.measure=&#39;deviance&#39;. Alternatively, use smaller
-## value for nfolds
-
-## Warning: Too few (&lt; 10) observations per fold for type.measure=&#39;auc&#39; in
-## cv.lognet; changed to type.measure=&#39;deviance&#39;. Alternatively, use smaller
-## value for nfolds
-
-## Warning: Too few (&lt; 10) observations per fold for type.measure=&#39;auc&#39; in
-## cv.lognet; changed to type.measure=&#39;deviance&#39;. Alternatively, use smaller
-## value for nfolds
-
-## Warning: Too few (&lt; 10) observations per fold for type.measure=&#39;auc&#39; in
-## cv.lognet; changed to type.measure=&#39;deviance&#39;. Alternatively, use smaller
-## value for nfolds</code></pre>
 <p>The table of results have cluster numbers changing between 2 and 10.</p>
-<pre class="r"><code>table_of_results[order(table_of_results$cvminerror)]</code></pre>
-<pre><code>##     clusts             clutype  disttype cvminlambda cvminerror
-##  1:     10            k-medoid euclidean 0.007636667  0.7801736
-##  2:      6            k-medoid euclidean 0.006721152  0.7816499
-##  3:      7            k-medoid euclidean 0.005125893  0.7823461
-##  4:      8 hierarch_clustering euclidean 0.009507106  0.8017057
-##  5:     10 hierarch_clustering euclidean 0.007191777  0.8162903
-##  6:      8            k-medoid euclidean 0.006866171  0.8185699
-##  7:      9            k-medoid euclidean 0.007636667  0.8188559
-##  8:      5 hierarch_clustering euclidean 0.008046755  0.8419201
-##  9:      6 hierarch_clustering euclidean 0.008831304  0.8489163
-## 10:      7 hierarch_clustering euclidean 0.012567834  0.8590070
-## 11:      8            k-medoid manhattan 0.001930942  0.8597245
-## 12:      7            k-medoid manhattan 0.010281025  0.8731089
-## 13:      9 hierarch_clustering euclidean 0.011451342  0.8829635
-## 14:      7 hierarch_clustering manhattan 0.004876040  0.8861164
-## 15:      5 hierarch_clustering manhattan 0.005873207  0.8906679
-## 16:      9            k-medoid manhattan 0.002552295  0.8940418
-## 17:      6 hierarch_clustering manhattan 0.005873207  0.8941335
-## 18:      6            k-medoid manhattan 0.007743708  0.9168339
-## 19:     10 hierarch_clustering manhattan 0.003688545  0.9280658
-## 20:     10            k-medoid manhattan 0.009175904  0.9310738
-## 21:      9 hierarch_clustering manhattan 0.016375788  0.9428011
-## 22:      8 hierarch_clustering manhattan 0.010284472  0.9537075
-## 23:      3 hierarch_clustering manhattan 0.005546123  0.9668486
-## 24:      4            k-medoid manhattan 0.003075206  0.9803113
-## 25:      4 hierarch_clustering manhattan 0.008453874  1.0269818
-## 26:      3            k-medoid manhattan 0.009687469  1.0303146
-## 27:      5            k-medoid manhattan 0.014950589  1.0587732
-## 28:      3 hierarch_clustering euclidean 0.007160355  1.0739855
-## 29:      5            k-medoid euclidean 0.009806660  1.0934213
-## 30:      4            k-medoid euclidean 0.006146879  1.0964816
-## 31:      4 hierarch_clustering euclidean 0.011674464  1.1271902
-## 32:      2            k-medoid euclidean 0.003005805  1.1659424
-## 33:      2 hierarch_clustering manhattan 0.006680325  1.1822842
-## 34:      2            k-medoid manhattan 0.004047220  1.1973257
-## 35:      3            k-medoid euclidean 0.022029816  1.2005660
-## 36:      2 hierarch_clustering euclidean 0.021442567  1.2261272
-##     clusts             clutype  disttype cvminlambda cvminerror</code></pre>
+<pre class="r"><code>table_of_results[order(table_of_results$min_error_with_cv)]</code></pre>
+<pre><code>##     cluster_numbers method_of_clustering type_of_distribution
+##  1:               6             k-medoid            euclidean
+##  2:               8  hierarch_clustering            euclidean
+##  3:               7             k-medoid            euclidean
+##  4:               7  hierarch_clustering            euclidean
+##  5:              10             k-medoid            euclidean
+##  6:               9             k-medoid            euclidean
+##  7:               8             k-medoid            euclidean
+##  8:               9  hierarch_clustering            euclidean
+##  9:               6  hierarch_clustering            euclidean
+## 10:               5  hierarch_clustering            euclidean
+## 11:              10  hierarch_clustering            euclidean
+## 12:               6             k-medoid            manhattan
+## 13:               8  hierarch_clustering            manhattan
+## 14:               6  hierarch_clustering            manhattan
+## 15:               5  hierarch_clustering            manhattan
+## 16:               8             k-medoid            manhattan
+## 17:               7  hierarch_clustering            manhattan
+## 18:               7             k-medoid            manhattan
+## 19:               9             k-medoid            manhattan
+## 20:              10  hierarch_clustering            manhattan
+## 21:               9  hierarch_clustering            manhattan
+## 22:              10             k-medoid            manhattan
+## 23:               3  hierarch_clustering            manhattan
+## 24:               3             k-medoid            manhattan
+## 25:               4             k-medoid            manhattan
+## 26:               4  hierarch_clustering            manhattan
+## 27:               5             k-medoid            manhattan
+## 28:               5             k-medoid            euclidean
+## 29:               4             k-medoid            euclidean
+## 30:               3  hierarch_clustering            euclidean
+## 31:               4  hierarch_clustering            euclidean
+## 32:               2             k-medoid            euclidean
+## 33:               3             k-medoid            euclidean
+## 34:               2  hierarch_clustering            euclidean
+## 35:               2             k-medoid            manhattan
+## 36:               2  hierarch_clustering            manhattan
+##     cluster_numbers method_of_clustering type_of_distribution
+##     min_lambda_with_cv min_error_with_cv
+##  1:        0.005580019         0.7824011
+##  2:        0.008662520         0.7837240
+##  3:        0.007436792         0.7912129
+##  4:        0.005440315         0.8027834
+##  5:        0.009198393         0.8099024
+##  6:        0.009198393         0.8187335
+##  7:        0.005700416         0.8190762
+##  8:        0.015138001         0.8266169
+##  9:        0.006087075         0.8481281
+## 10:        0.010637336         0.8510541
+## 11:        0.011451342         0.8546860
+## 12:        0.007055778         0.8663471
+## 13:        0.004885958         0.8772254
+## 14:        0.005873207         0.8888686
+## 15:        0.007074299         0.9012902
+## 16:        0.004064448         0.9066330
+## 17:        0.007764034         0.9070104
+## 18:        0.007777219         0.9104968
+## 19:        0.012410796         0.9136349
+## 20:        0.007074299         0.9211738
+## 21:        0.010284472         0.9378876
+## 22:        0.010070543         0.9472390
+## 23:        0.005053421         0.9669523
+## 24:        0.003481496         0.9704252
+## 25:        0.004461597         0.9842574
+## 26:        0.005309279         0.9954002
+## 27:        0.007102741         0.9970418
+## 28:        0.014227784         1.0959262
+## 29:        0.009787570         1.1049470
+## 30:        0.016541349         1.1228899
+## 31:        0.024573627         1.1433033
+## 32:        0.006943800         1.1906510
+## 33:        0.020072748         1.1920757
+## 34:        0.013466557         1.1927276
+## 35:        0.004047220         1.1966918
+## 36:        0.007331649         1.2132417
+##     min_lambda_with_cv min_error_with_cv</code></pre>
 
 
 
